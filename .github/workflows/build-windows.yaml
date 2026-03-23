@@ -50,10 +50,18 @@ jobs:
         shell: pwsh
         run: |
           # The DLL is already at the workspace root from the Package step
-          # installer.nsi expects obs-multi-rtmp.dll in the same directory
+          # installer.nsi expects obs-multi-rtmp.dll and data/ in the same directory
+          # Verify files exist
+          if (!(Test-Path "obs-multi-rtmp.dll")) {
+            Write-Error "obs-multi-rtmp.dll not found"
+            exit 1
+          }
+          if (!(Test-Path "data/locale/en-US.ini")) {
+            Write-Error "data/locale/en-US.ini not found"
+            exit 1
+          }
           # NSIS is pre-installed on windows-2022 runners
           makensis installer.nsi
-          # Move installer to workspace root (it's already there since we run from repo root)
           if (Test-Path "ChaosCast-OBS-Plugin-Setup.exe") {
             Write-Host "Installer built successfully"
             Get-Item "ChaosCast-OBS-Plugin-Setup.exe" | Select-Object Name, Length
