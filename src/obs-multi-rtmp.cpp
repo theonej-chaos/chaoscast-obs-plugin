@@ -256,7 +256,14 @@ bool obs_module_load()
     blog(LOG_INFO, TAG "version: %s by SoraYuki https://github.com/sorayuki/obs-multi-rtmp/", PLUGIN_VERSION);
 
     // Register ChaosCast vendor requests with obs-websocket
-    chaoscast_vendor_init();
+    // Deferred to FINISHED_LOADING because obs-websocket must load first
+    obs_frontend_add_event_callback(
+        [](enum obs_frontend_event event, void *) {
+            if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+                chaoscast_vendor_init();
+            }
+        }, nullptr
+    );
 
     obs_frontend_add_event_callback(
         [](enum obs_frontend_event event, void *private_data) {
