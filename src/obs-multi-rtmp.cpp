@@ -8,6 +8,7 @@
 #include "plugin-support.h"
 
 #include "output-config.h"
+#include "vendor-requests.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -253,6 +254,9 @@ bool obs_module_load()
     }
 
     blog(LOG_INFO, TAG "version: %s by SoraYuki https://github.com/sorayuki/obs-multi-rtmp/", PLUGIN_VERSION);
+
+    // Register ChaosCast vendor requests with obs-websocket
+    chaoscast_vendor_init();
 
     obs_frontend_add_event_callback(
         [](enum obs_frontend_event event, void *private_data) {
