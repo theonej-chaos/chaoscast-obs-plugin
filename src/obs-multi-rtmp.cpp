@@ -255,16 +255,6 @@ bool obs_module_load()
 
     blog(LOG_INFO, TAG "version: %s by SoraYuki https://github.com/sorayuki/obs-multi-rtmp/", PLUGIN_VERSION);
 
-    // Register ChaosCast vendor requests with obs-websocket
-    // Deferred to FINISHED_LOADING because obs-websocket must load first
-    obs_frontend_add_event_callback(
-        [](enum obs_frontend_event event, void *) {
-            if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
-                chaoscast_vendor_init();
-            }
-        }, nullptr
-    );
-
     obs_frontend_add_event_callback(
         [](enum obs_frontend_event event, void *private_data) {
             auto dock = static_cast<MultiOutputWidget*>(private_data);
@@ -289,4 +279,12 @@ bool obs_module_load()
 const char *obs_module_description(void)
 {
     return "Multiple RTMP Output Plugin";
+}
+
+void obs_module_post_load(void)
+{
+    // Register ChaosCast vendor requests with obs-websocket.
+    // Per the obs-websocket API docs, vendor registration MUST happen
+    // in obs_module_post_load(), after all modules have loaded.
+    chaoscast_vendor_init();
 }

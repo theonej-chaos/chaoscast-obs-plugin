@@ -5,12 +5,8 @@
  * control multiple RTMP outputs via CallVendorRequest over the existing
  * WebSocket connection. Each output shares the main streaming encoder.
  *
- * Vendor requests:
- *   add_output    — create a named output (platform + RTMP URL + key)
- *   start_output  — start streaming on a named output
- *   stop_output   — stop streaming on a named output
- *   remove_output — tear down a named output
- *   get_status    — get status of all managed outputs
+ * Uses the official obs-websocket vendor API (obs-websocket-api.h).
+ * MUST be called from obs_module_post_load() per the API docs.
  *
  * License: GPL-2.0 (same as obs-multi-rtmp)
  */
@@ -29,31 +25,43 @@
 #include <string>
 #include <cstring>
 
-#include <QTimer>
-#include <QObject>
-
 // Override TAG from pch.h for this translation unit
 #undef TAG
 #define TAG "[chaoscast-vendor] "
 
-// obs-websocket vendor API typedefs (from obs-websocket's exported header)
-// These are resolved at runtime via obs_websocket_register_vendor etc.
-typedef void* obs_websocket_vendor;
+// ── obs-websocket vendor API (from obs-websocket-api.h) ──
+// We inline the necessary parts to avoid a build dependency on obs-websocket headers.
+
+typedef void *obs_websocket_vendor;
 typedef void (*obs_websocket_request_callback_function)(
     obs_data_t *request_data, obs_data_t *response_data, void *priv_data);
 
-// Function pointers loaded from obs-websocket module at runtime
-static obs_websocket_vendor (*WS_register_vendor)(const char *) = nullptr;
-static void (*WS_vendor_register_request)(
-    obs_websocket_vendor, const char *,
-    obs_websocket_request_callback_function, void *) = nullptr;
+struct obs_websocket_request_callback {
+    obs_websocket_request_callback_function callback;
+    void *priv_data;
+};
+
+// Get obs-websocket's private proc_handler (NOT the global one)
+static proc_handler_t *get_websocket_ph()
+{
+    proc_handler_t *global_ph = obs_get_proc_handler();
+    if (!global_ph) return nullptr;
+
+    calldata_t cd = {0, 0, 0, 0};
+    if (!proc_handler_call(global_ph, "obs_websocket_api_get_ph", &cd)) {
+        calldata_free(&cd);
+        return nullptr;
+    }
+    proc_handler_t *ph = (proc_handler_t *)calldata_ptr(&cd, "ph");
+    calldata_free(&cd);
+    return ph;
+}
 
 // ── Managed Output ──
-// Each output is a headless RTMP output sharing the main encoder.
 struct ManagedOutput {
-    std::string name;       // e.g. "twitch", "youtube"
-    std::string server;     // RTMP URL
-    std::string key;        // stream key
+    std::string name;
+    std::string server;
+    std::string key;
     obs_output_t *output = nullptr;
     obs_service_t *service = nullptr;
     bool running = false;
@@ -107,8 +115,6 @@ static obs_encoder_t *get_main_audio_encoder()
 }
 
 // ── add_output handler ──
-// Request: { "name": "twitch", "server": "rtmp://...", "key": "live_xxx" }
-// Response: { "success": true }
 static void handle_add_output(obs_data_t *request, obs_data_t *response, void *)
 {
     const char *name = obs_data_get_string(request, "name");
@@ -123,7 +129,6 @@ static void handle_add_output(obs_data_t *request, obs_data_t *response, void *)
 
     std::lock_guard<std::mutex> lock(s_mutex);
 
-    // If output already exists with this name, update its config
     auto it = s_outputs.find(name);
     if (it != s_outputs.end()) {
         if (it->second.running) {
@@ -131,7 +136,6 @@ static void handle_add_output(obs_data_t *request, obs_data_t *response, void *)
             obs_data_set_string(response, "error", "Output is running, stop it first");
             return;
         }
-        // Tear down old output
         if (it->second.output) {
             obs_output_release(it->second.output);
             it->second.output = nullptr;
@@ -147,7 +151,6 @@ static void handle_add_output(obs_data_t *request, obs_data_t *response, void *)
     mo.name = name;
     mo.server = rtmp_server ? rtmp_server : "";
     mo.key = rtmp_key ? rtmp_key : "";
-
     s_outputs[name] = std::move(mo);
 
     blog(LOG_INFO, TAG "add_output: %s -> %s", name, rtmp_server ? rtmp_server : "(none)");
@@ -155,9 +158,6 @@ static void handle_add_output(obs_data_t *request, obs_data_t *response, void *)
 }
 
 // ── start_output handler ──
-// Request: { "name": "twitch" }
-// Optionally override: { "name": "twitch", "server": "rtmp://...", "key": "xxx" }
-// Response: { "success": true }
 static void handle_start_output(obs_data_t *request, obs_data_t *response, void *)
 {
     const char *name = obs_data_get_string(request, "name");
@@ -183,7 +183,6 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
         return;
     }
 
-    // Allow overriding server/key at start time
     const char *srv = obs_data_get_string(request, "server");
     const char *key = obs_data_get_string(request, "key");
     if (srv && srv[0]) mo.server = srv;
@@ -195,7 +194,6 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
         return;
     }
 
-    // Get main encoders (shared)
     obs_encoder_t *venc = get_main_video_encoder();
     obs_encoder_t *aenc = get_main_audio_encoder();
     if (!venc || !aenc) {
@@ -205,7 +203,6 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
         return;
     }
 
-    // Create RTMP service
     OBSDataAutoRelease svc_settings = obs_data_create();
     obs_data_set_string(svc_settings, "server", mo.server.c_str());
     obs_data_set_string(svc_settings, "key", mo.key.c_str());
@@ -218,7 +215,6 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
         return;
     }
 
-    // Create output
     std::string out_name = std::string("chaoscast_") + name;
     OBSDataAutoRelease out_settings = obs_data_create();
     mo.output = obs_output_create("rtmp_output", out_name.c_str(), out_settings, nullptr);
@@ -230,23 +226,19 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
         return;
     }
 
-    // Wire up
     obs_output_set_service(mo.output, mo.service);
     obs_output_set_video_encoder(mo.output, venc);
     obs_output_set_audio_encoder(mo.output, aenc, 0);
 
-    // Connect signals — we pass a pointer to the name stored in the map
     auto sig = obs_output_get_signal_handler(mo.output);
     signal_handler_connect(sig, "start", on_output_started, &it->second.name);
     signal_handler_connect(sig, "stop", on_output_stopped, &it->second.name);
 
-    // Start
     if (!obs_output_start(mo.output)) {
         const char *err = obs_output_get_last_error(mo.output);
         mo.lastError = err ? err : "Unknown start error";
         blog(LOG_ERROR, TAG "start_output %s failed: %s", name, mo.lastError.c_str());
 
-        // Cleanup
         signal_handler_disconnect(sig, "start", on_output_started, &it->second.name);
         signal_handler_disconnect(sig, "stop", on_output_stopped, &it->second.name);
         obs_output_release(mo.output);
@@ -264,7 +256,6 @@ static void handle_start_output(obs_data_t *request, obs_data_t *response, void 
 }
 
 // ── stop_output handler ──
-// Request: { "name": "twitch" }
 static void handle_stop_output(obs_data_t *request, obs_data_t *response, void *)
 {
     const char *name = obs_data_get_string(request, "name");
@@ -275,7 +266,6 @@ static void handle_stop_output(obs_data_t *request, obs_data_t *response, void *
     }
 
     std::lock_guard<std::mutex> lock(s_mutex);
-
     auto it = s_outputs.find(name);
     if (it == s_outputs.end()) {
         obs_data_set_bool(response, "success", false);
@@ -290,16 +280,13 @@ static void handle_stop_output(obs_data_t *request, obs_data_t *response, void *
         return;
     }
 
-    if (mo.output) {
-        obs_output_stop(mo.output);
-    }
+    if (mo.output) obs_output_stop(mo.output);
 
     blog(LOG_INFO, TAG "stop_output: %s", name);
     obs_data_set_bool(response, "success", true);
 }
 
 // ── remove_output handler ──
-// Request: { "name": "twitch" }
 static void handle_remove_output(obs_data_t *request, obs_data_t *response, void *)
 {
     const char *name = obs_data_get_string(request, "name");
@@ -310,7 +297,6 @@ static void handle_remove_output(obs_data_t *request, obs_data_t *response, void
     }
 
     std::lock_guard<std::mutex> lock(s_mutex);
-
     auto it = s_outputs.find(name);
     if (it == s_outputs.end()) {
         obs_data_set_bool(response, "success", true);
@@ -319,23 +305,14 @@ static void handle_remove_output(obs_data_t *request, obs_data_t *response, void
     }
 
     auto &mo = it->second;
-
-    // Force stop if running
-    if (mo.output && mo.running) {
-        obs_output_force_stop(mo.output);
-    }
-
-    // Disconnect signals
+    if (mo.output && mo.running) obs_output_force_stop(mo.output);
     if (mo.output) {
         auto sig = obs_output_get_signal_handler(mo.output);
         signal_handler_disconnect(sig, "start", on_output_started, &mo.name);
         signal_handler_disconnect(sig, "stop", on_output_stopped, &mo.name);
         obs_output_release(mo.output);
     }
-    if (mo.service) {
-        obs_service_release(mo.service);
-    }
-
+    if (mo.service) obs_service_release(mo.service);
     s_outputs.erase(it);
 
     blog(LOG_INFO, TAG "remove_output: %s", name);
@@ -343,32 +320,24 @@ static void handle_remove_output(obs_data_t *request, obs_data_t *response, void
 }
 
 // ── get_status handler ──
-// Request: {} (empty) or { "name": "twitch" } for single
-// Response: { "outputs": { "twitch": { "running": true, ... }, ... } }
 static void handle_get_status(obs_data_t *request, obs_data_t *response, void *)
 {
     const char *filter_name = obs_data_get_string(request, "name");
-
     std::lock_guard<std::mutex> lock(s_mutex);
 
     OBSDataAutoRelease outputs_obj = obs_data_create();
-
     for (auto &[name, mo] : s_outputs) {
-        if (filter_name && filter_name[0] && name != filter_name)
-            continue;
+        if (filter_name && filter_name[0] && name != filter_name) continue;
 
         OBSDataAutoRelease entry = obs_data_create();
         obs_data_set_bool(entry, "running", mo.running);
         obs_data_set_string(entry, "server", mo.server.c_str());
         obs_data_set_string(entry, "error", mo.lastError.c_str());
-
-        // Add bitrate/frames if running
         if (mo.running && mo.output) {
             obs_data_set_int(entry, "totalBytes", obs_output_get_total_bytes(mo.output));
             obs_data_set_int(entry, "totalFrames", obs_output_get_total_frames(mo.output));
             obs_data_set_int(entry, "droppedFrames", obs_output_get_frames_dropped(mo.output));
         }
-
         obs_data_set_obj(outputs_obj, name.c_str(), entry);
     }
 
@@ -376,57 +345,50 @@ static void handle_get_status(obs_data_t *request, obs_data_t *response, void *)
     obs_data_set_bool(response, "success", true);
 }
 
-// ── Vendor Registration ──
-// Called after obs-websocket has had time to register its proc_handler entries.
-// We use a retry approach because the exact timing depends on plugin load order.
-static bool s_vendor_registered = false;
-
-static bool try_vendor_register()
+// ── Vendor Registration (called from obs_module_post_load) ──
+void chaoscast_vendor_init()
 {
-    if (s_vendor_registered) return true;
-
-    auto ph = obs_get_proc_handler();
+    // Get obs-websocket's private proc_handler
+    proc_handler_t *ph = get_websocket_ph();
     if (!ph) {
-        blog(LOG_DEBUG, TAG "No proc handler yet");
-        return false;
+        blog(LOG_WARNING, TAG "Could not get obs-websocket proc handler. Is obs-websocket installed?");
+        return;
     }
 
-    // Step 1: Register vendor "chaoscast"
-    calldata_t cd;
-    calldata_init(&cd);
+    // Register vendor "chaoscast"
+    calldata_t cd = {0, 0, 0, 0};
     calldata_set_string(&cd, "name", "chaoscast");
-
-    if (!proc_handler_call(ph, "vendor_register", &cd)) {
-        calldata_free(&cd);
-        return false;
-    }
-
+    proc_handler_call(ph, "vendor_register", &cd);
     obs_websocket_vendor vendor = calldata_ptr(&cd, "vendor");
     calldata_free(&cd);
 
     if (!vendor) {
-        blog(LOG_WARNING, TAG "vendor_register returned null vendor");
-        return false;
+        blog(LOG_WARNING, TAG "vendor_register returned null");
+        return;
     }
 
     blog(LOG_INFO, TAG "Registered vendor 'chaoscast' with obs-websocket");
 
-    // Step 2: Register request handlers
-    auto register_req = [&](const char *req_name,
+    // Register request handlers using the official API pattern
+    // The callback must be wrapped in obs_websocket_request_callback struct
+    auto register_req = [&](const char *req_type,
                             obs_websocket_request_callback_function cb) {
-        calldata_t rcd;
-        calldata_init(&rcd);
-        calldata_set_ptr(&rcd, "vendor", vendor);
-        calldata_set_string(&rcd, "name", req_name);
-        calldata_set_ptr(&rcd, "callback", (void *)cb);
-        calldata_set_ptr(&rcd, "priv_data", nullptr);
+        struct obs_websocket_request_callback req_cb = {cb, nullptr};
 
-        if (!proc_handler_call(ph, "vendor_request_register", &rcd)) {
-            blog(LOG_WARNING, TAG "Failed to register request: %s", req_name);
-        } else {
-            blog(LOG_INFO, TAG "Registered request: %s", req_name);
-        }
+        calldata_t rcd = {0, 0, 0, 0};
+        calldata_set_ptr(&rcd, "vendor", vendor);
+        calldata_set_string(&rcd, "type", req_type);
+        calldata_set_ptr(&rcd, "callback", &req_cb);
+
+        proc_handler_call(ph, "vendor_request_register", &rcd);
+        bool success = calldata_bool(&rcd, "success");
         calldata_free(&rcd);
+
+        if (success) {
+            blog(LOG_INFO, TAG "Registered request: %s", req_type);
+        } else {
+            blog(LOG_WARNING, TAG "Failed to register request: %s", req_type);
+        }
     };
 
     register_req("add_output", handle_add_output);
@@ -436,45 +398,4 @@ static bool try_vendor_register()
     register_req("get_status", handle_get_status);
 
     blog(LOG_INFO, TAG "All vendor requests registered successfully");
-    s_vendor_registered = true;
-    return true;
-}
-
-void chaoscast_vendor_init()
-{
-    // Try immediately first
-    if (try_vendor_register()) return;
-
-    // If obs-websocket isn't ready yet, retry on a timer
-    // obs-websocket registers its vendor API in FINISHED_LOADING or post_load,
-    // timing varies by version. We retry every 500ms up to 10 times.
-    blog(LOG_INFO, TAG "obs-websocket not ready, will retry vendor registration...");
-
-    struct RetryData {
-        int attempts;
-    };
-
-    auto *rd = new RetryData{0};
-
-    // Use a QTimer on the UI thread to retry
-    auto mainwin = obs_frontend_get_main_window();
-    if (mainwin) {
-        auto *timer = new QTimer();
-        timer->setInterval(500);
-        QObject::connect(timer, &QTimer::timeout, [timer, rd]() {
-            rd->attempts++;
-            if (try_vendor_register()) {
-                blog(LOG_INFO, TAG "Vendor registered on attempt %d", rd->attempts);
-                timer->stop();
-                timer->deleteLater();
-                delete rd;
-            } else if (rd->attempts >= 20) {
-                blog(LOG_ERROR, TAG "Failed to register vendor after %d attempts", rd->attempts);
-                timer->stop();
-                timer->deleteLater();
-                delete rd;
-            }
-        });
-        timer->start();
-    }
 }
