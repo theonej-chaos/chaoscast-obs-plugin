@@ -46,10 +46,22 @@ jobs:
           # Also zip the full release folder
           Compress-Archive -Path release/* -DestinationPath "$env:GITHUB_WORKSPACE/chaoscast-obs-plugin-windows-x64.zip"
 
-      - name: Upload DLL Artifact
+      - name: Build NSIS Installer
+        shell: pwsh
+        run: |
+          # Copy DLL next to installer script so NSIS can find it
+          Copy-Item "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -Destination "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -ErrorAction SilentlyContinue
+          Copy-Item "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -Destination "obs-multi-rtmp.dll"
+          # NSIS is pre-installed on windows-2022 runners
+          makensis installer.nsi
+          # Move installer to workspace root
+          Move-Item "ChaosCast-OBS-Plugin-Setup.exe" -Destination "$env:GITHUB_WORKSPACE/ChaosCast-OBS-Plugin-Setup.exe"
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: chaoscast-obs-plugin-${{ steps.setup.outputs.pluginVersion }}-windows-x64
           path: |
             ${{ github.workspace }}/chaoscast-obs-plugin-windows-x64.zip
             ${{ github.workspace }}/obs-multi-rtmp.dll
+            ${{ github.workspace }}/ChaosCast-OBS-Plugin-Setup.exe

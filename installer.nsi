@@ -1,46 +1,70 @@
-﻿OutFile "obs-multi-rtmp-setup.exe"
+﻿; ChaosCast OBS Plugin Installer
+; Installs the obs-multi-rtmp plugin with ChaosCast vendor support
 
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+; ── Branding ──
+Name "ChaosCast OBS Plugin"
+OutFile "ChaosCast-OBS-Plugin-Setup.exe"
+Caption "ChaosCast OBS Plugin Installer"
+BrandingText "ChaosCast — Multistream Manager"
 Unicode true
 RequestExecutionLevel user
-
-SetDatablockOptimize on
-SetCompress auto
 SetCompressor /SOLID lzma
 
-Name "obs-multi-rtmp"
-Caption "Multiple RTMP Output Plugin for OBS Studio"
-Icon "${NSISDIR}\Contrib\Graphics\Icons\win-install.ico"
+; ── Variables ──
+Var ObsPluginDir
 
-Var /Global DefInstDir
+; ── MUI Settings ──
+!define MUI_ABORTWARNING
+!define MUI_WELCOMEPAGE_TITLE "ChaosCast OBS Plugin"
+!define MUI_WELCOMEPAGE_TEXT "This will install the ChaosCast multistream plugin for OBS Studio.$\r$\n$\r$\nThe plugin lets you stream to multiple platforms (Twitch, YouTube, Kick, TikTok, X) simultaneously from one OBS instance.$\r$\n$\r$\nRequirements:$\r$\n  • OBS Studio 30+ (with obs-websocket v5)$\r$\n$\r$\nClick Next to continue."
+!define MUI_FINISHPAGE_TITLE "Installation Complete"
+!define MUI_FINISHPAGE_TEXT "The ChaosCast plugin has been installed.$\r$\n$\r$\nNext steps:$\r$\n  1. Open (or restart) OBS Studio$\r$\n  2. Go to chaoscast.live and sign in$\r$\n  3. Click 'Copy Bridge URL' and add it as a Browser Source in OBS$\r$\n  4. Toggle your platforms live from the dashboard$\r$\n$\r$\nHappy streaming!"
+
+; ── Pages ──
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_LANGUAGE "English"
+
+; ── Init: Find OBS install ──
 Function .onInit
+    ; Try standard OBS plugin paths
+    ; 1. %APPDATA%/obs-studio/plugins (user-level, preferred)
+    ReadEnvStr $0 "APPDATA"
+    StrCpy $ObsPluginDir "$0\obs-studio\plugins"
+    IfFileExists "$0\obs-studio\*.*" FoundObs 0
+
+    ; 2. %ALLUSERSPROFILE%/obs-studio/plugins (system-level)
     ReadEnvStr $0 "ALLUSERSPROFILE"
-    StrCpy $DefInstDir "$0\obs-studio\plugins"
-    StrCpy $INSTDIR "$DefInstDir"
+    StrCpy $ObsPluginDir "$0\obs-studio\plugins"
+    IfFileExists "$0\obs-studio\*.*" FoundObs 0
 
-    IfFileExists "$DefInstDir\obs-multi-rtmp\*.*" AskUninst DontAskUninst
-    AskUninst:
-        MessageBox MB_YESNO|MB_ICONQUESTION "安装还是卸载obs-multi-rtmp？ 是=安装，否=卸载$\r$\n$\r$\nobs-multi-rtmpを入れるか外れるか？はい=入れる、いいえ=外れる$\r$\n$\r$\nInstall or remove obs-multi-rtmp? Yes = Install, No = Remove" IDYES NotDoUninst IDNO DoUninst
-    DoUninst:
-        RMDir /r "$DefInstDir"
-        MessageBox MB_OK|MB_ICONINFORMATION "完成$\r$\n$\r$\n完了$\r$\n$\r$\nDone"
-        Quit
-    NotDoUninst:
-    DontAskUninst:
+    ; 3. Default Program Files
+    StrCpy $ObsPluginDir "$PROGRAMFILES64\obs-studio\obs-plugins\64bit"
+    IfFileExists "$PROGRAMFILES64\obs-studio\*.*" FoundObs 0
+
+    ; Fallback to user appdata
+    ReadEnvStr $0 "APPDATA"
+    StrCpy $ObsPluginDir "$0\obs-studio\plugins"
+
+    FoundObs:
 FunctionEnd
 
-Function onDirPageLeave
-StrCmp "$INSTDIR" "$DefInstDir" DirNotModified DirModified
-DirModified:
-MessageBox MB_OK|MB_ICONSTOP "Please don't change the install directory."
-Abort
-DirNotModified:
-FunctionEnd
+; ── Install Section ──
+Section "Install"
+    SetOutPath "$ObsPluginDir\obs-multi-rtmp\bin\64bit"
+    File "obs-multi-rtmp.dll"
 
-Page directory "" "" onDirPageLeave
-Page instfiles
-
-Section
-SetOutPath "$INSTDIR"
-File /r "release\Release\obs-multi-rtmp"
+    ; Write uninstaller
+    SetOutPath "$ObsPluginDir\obs-multi-rtmp"
+    WriteUninstaller "$ObsPluginDir\obs-multi-rtmp\uninstall.exe"
 SectionEnd
 
+; ── Uninstaller ──
+Section "Uninstall"
+    RMDir /r "$ObsPluginDir\obs-multi-rtmp"
+SectionEnd
