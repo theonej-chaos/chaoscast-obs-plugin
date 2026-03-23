@@ -29,6 +29,9 @@
 #include <string>
 #include <cstring>
 
+#include <QTimer>
+#include <QObject>
+
 // Override TAG from pch.h for this translation unit
 #undef TAG
 #define TAG "[chaoscast-vendor] "
@@ -374,21 +377,19 @@ static void handle_get_status(obs_data_t *request, obs_data_t *response, void *)
 }
 
 // ── Vendor Registration ──
-void chaoscast_vendor_init()
+// Called after obs-websocket has had time to register its proc_handler entries.
+// We use a retry approach because the exact timing depends on plugin load order.
+static bool s_vendor_registered = false;
+
+static bool try_vendor_register()
 {
-    // Resolve obs-websocket vendor API at runtime
-    // These are exported by obs-websocket as proc_handler procedures
+    if (s_vendor_registered) return true;
+
     auto ph = obs_get_proc_handler();
     if (!ph) {
-        blog(LOG_WARNING, TAG "No proc handler — obs-websocket may not be loaded");
-        return;
+        blog(LOG_DEBUG, TAG "No proc handler yet");
+        return false;
     }
-
-    // obs-websocket v5 exports these via proc_handler:
-    //   "vendor_register"          -> returns vendor handle
-    //   "vendor_request_register"  -> registers a request on a vendor
-    //
-    // We use calldata to call them.
 
     // Step 1: Register vendor "chaoscast"
     calldata_t cd;
@@ -396,18 +397,16 @@ void chaoscast_vendor_init()
     calldata_set_string(&cd, "name", "chaoscast");
 
     if (!proc_handler_call(ph, "vendor_register", &cd)) {
-        blog(LOG_WARNING, TAG "Failed to call vendor_register — obs-websocket not loaded?");
         calldata_free(&cd);
-        return;
+        return false;
     }
 
-    obs_websocket_vendor vendor =
-        calldata_ptr(&cd, "vendor");
+    obs_websocket_vendor vendor = calldata_ptr(&cd, "vendor");
     calldata_free(&cd);
 
     if (!vendor) {
         blog(LOG_WARNING, TAG "vendor_register returned null vendor");
-        return;
+        return false;
     }
 
     blog(LOG_INFO, TAG "Registered vendor 'chaoscast' with obs-websocket");
@@ -437,4 +436,45 @@ void chaoscast_vendor_init()
     register_req("get_status", handle_get_status);
 
     blog(LOG_INFO, TAG "All vendor requests registered successfully");
+    s_vendor_registered = true;
+    return true;
+}
+
+void chaoscast_vendor_init()
+{
+    // Try immediately first
+    if (try_vendor_register()) return;
+
+    // If obs-websocket isn't ready yet, retry on a timer
+    // obs-websocket registers its vendor API in FINISHED_LOADING or post_load,
+    // timing varies by version. We retry every 500ms up to 10 times.
+    blog(LOG_INFO, TAG "obs-websocket not ready, will retry vendor registration...");
+
+    struct RetryData {
+        int attempts;
+    };
+
+    auto *rd = new RetryData{0};
+
+    // Use a QTimer on the UI thread to retry
+    auto mainwin = obs_frontend_get_main_window();
+    if (mainwin) {
+        auto *timer = new QTimer();
+        timer->setInterval(500);
+        QObject::connect(timer, &QTimer::timeout, [timer, rd]() {
+            rd->attempts++;
+            if (try_vendor_register()) {
+                blog(LOG_INFO, TAG "Vendor registered on attempt %d", rd->attempts);
+                timer->stop();
+                timer->deleteLater();
+                delete rd;
+            } else if (rd->attempts >= 20) {
+                blog(LOG_ERROR, TAG "Failed to register vendor after %d attempts", rd->attempts);
+                timer->stop();
+                timer->deleteLater();
+                delete rd;
+            }
+        });
+        timer->start();
+    }
 }
