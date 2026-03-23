@@ -76,6 +76,22 @@ Function .onInit
         Abort
 
     FoundSomething:
+
+    ; Check OBS version — we need 30+
+    ; Try to read version from the exe
+    StrCmp $ObsProgramFiles "" SkipVersionCheck 0
+        GetDLLVersion "$ObsProgramFiles\bin\64bit\obs64.exe" $R0 $R1
+        IntOp $R2 $R0 >> 16
+        IntOp $R2 $R2 & 0xFFFF
+        ; $R2 is now the major version
+        IntCmp $R2 30 VersionOK VersionTooOld VersionOK
+        VersionTooOld:
+            MessageBox MB_YESNO|MB_ICONEXCLAMATION \
+                "OBS Studio version $R2 detected. This plugin requires OBS 30 or newer.$\r$\n$\r$\nPlease update OBS from obsproject.com before installing.$\r$\n$\r$\nInstall anyway?" \
+                IDYES VersionOK
+            Abort
+        VersionOK:
+    SkipVersionCheck:
 FunctionEnd
 
 ; ── Install Section ──
