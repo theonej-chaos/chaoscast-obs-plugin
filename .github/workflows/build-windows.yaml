@@ -49,13 +49,18 @@ jobs:
       - name: Build NSIS Installer
         shell: pwsh
         run: |
-          # Copy DLL next to installer script so NSIS can find it
-          Copy-Item "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -Destination "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -ErrorAction SilentlyContinue
-          Copy-Item "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll" -Destination "obs-multi-rtmp.dll"
+          # The DLL is already at the workspace root from the Package step
+          # installer.nsi expects obs-multi-rtmp.dll in the same directory
           # NSIS is pre-installed on windows-2022 runners
           makensis installer.nsi
-          # Move installer to workspace root
-          Move-Item "ChaosCast-OBS-Plugin-Setup.exe" -Destination "$env:GITHUB_WORKSPACE/ChaosCast-OBS-Plugin-Setup.exe"
+          # Move installer to workspace root (it's already there since we run from repo root)
+          if (Test-Path "ChaosCast-OBS-Plugin-Setup.exe") {
+            Write-Host "Installer built successfully"
+            Get-Item "ChaosCast-OBS-Plugin-Setup.exe" | Select-Object Name, Length
+          } else {
+            Write-Error "Installer not found after makensis"
+            exit 1
+          }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
