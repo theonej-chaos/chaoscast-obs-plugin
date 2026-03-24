@@ -10,6 +10,7 @@ Name "ChaosCast OBS Plugin"
 OutFile "ChaosCast-OBS-Plugin-Setup.exe"
 Caption "ChaosCast OBS Plugin Installer"
 BrandingText "ChaosCast — Multistream Manager"
+!define MUI_ICON "installer-icon.ico"
 Unicode true
 SetCompressor /SOLID lzma
 
