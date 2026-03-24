@@ -278,7 +278,7 @@ bool obs_module_load()
 
 const char *obs_module_description(void)
 {
-    return "Multiple RTMP Output Plugin";
+    return "ChaosCast Plugin";
 }
 
 void obs_module_post_load(void)
