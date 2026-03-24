@@ -60,6 +60,14 @@ jobs:
             Write-Error "data/locale/en-US.ini not found"
             exit 1
           }
+          if (!(Test-Path "installer-header.bmp")) {
+            Write-Error "installer-header.bmp not found"
+            exit 1
+          }
+          if (!(Test-Path "installer-welcome.bmp")) {
+            Write-Error "installer-welcome.bmp not found"
+            exit 1
+          }
           # NSIS is pre-installed on windows-2022 runners
           makensis installer.nsi
           if (Test-Path "ChaosCast-OBS-Plugin-Setup.exe") {

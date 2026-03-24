@@ -23,10 +23,25 @@ Var ObsSteam
 Var ObsAppData
 Var InstallCount
 
-; ── MUI Settings ──
+; ── MUI Visual Settings ──
 !define MUI_ABORTWARNING
+
+; Header image (150x57) — shows at top of instfiles page
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "installer-header.bmp"
+!define MUI_HEADERIMAGE_RIGHT
+
+; Welcome/Finish side panel (164x314) — shows on welcome and finish pages
+!define MUI_WELCOMEFINISHPAGE_BITMAP "installer-welcome.bmp"
+
+; Custom colors — dark theme to match ChaosCast branding
+!define MUI_BGCOLOR "0a0a0f"
+!define MUI_TEXTCOLOR "e0e0e0"
+!define MUI_INSTFILESPAGE_COLORS "e0e0e0 0a0a0f"
+
+; ── Page Text ──
 !define MUI_WELCOMEPAGE_TITLE "ChaosCast OBS Plugin"
-!define MUI_WELCOMEPAGE_TEXT "This will install the ChaosCast multistream plugin for OBS Studio.$\r$\n$\r$\nThe plugin lets you stream to multiple platforms simultaneously from one OBS instance.$\r$\n$\r$\nRequirements:$\r$\n  - OBS Studio 28+ with obs-websocket v5$\r$\n$\r$\nThe installer will auto-detect your OBS installation(s).$\r$\n$\r$\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TEXT "This will install the ChaosCast multistream plugin for OBS Studio.$\r$\n$\r$\nThe plugin lets you stream to multiple platforms simultaneously from one OBS instance.$\r$\n$\r$\nRequirements:$\r$\n  - OBS Studio 30+ with obs-websocket v5$\r$\n$\r$\nThe installer will auto-detect your OBS installation(s).$\r$\n$\r$\nClick Next to continue."
 !define MUI_FINISHPAGE_TITLE "Installation Complete"
 !define MUI_FINISHPAGE_TEXT "The ChaosCast plugin has been installed.$\r$\n$\r$\nNext steps:$\r$\n  1. Open (or restart) OBS Studio$\r$\n  2. Go to chaoscast.live and sign in$\r$\n  3. Click Copy Bridge URL and add it as a Browser Source in OBS$\r$\n  4. Toggle your platforms live from the dashboard$\r$\n$\r$\nHappy streaming!"
 

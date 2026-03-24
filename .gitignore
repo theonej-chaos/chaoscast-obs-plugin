@@ -13,6 +13,10 @@
 !buildspec.json
 !CMakeLists.txt
 !CMakePresets.json
+!installer.nsi
+!installer-icon.ico
+!installer-header.bmp
+!installer-welcome.bmp
 !LICENSE
 !README.md
 
