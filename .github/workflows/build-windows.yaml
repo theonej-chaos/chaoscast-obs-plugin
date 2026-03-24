@@ -41,7 +41,7 @@ jobs:
           $dll = Get-ChildItem -Path release -Recurse -Filter "*.dll" | Select-Object -First 1
           if ($dll) {
             Write-Host "Built DLL: $($dll.FullName)"
-            Copy-Item $dll.FullName -Destination "$env:GITHUB_WORKSPACE/obs-multi-rtmp.dll"
+            Copy-Item $dll.FullName -Destination "$env:GITHUB_WORKSPACE/chaoscast-plugin.dll"
           }
           # Also zip the full release folder
           Compress-Archive -Path release/* -DestinationPath "$env:GITHUB_WORKSPACE/chaoscast-obs-plugin-windows-x64.zip"
@@ -50,10 +50,10 @@ jobs:
         shell: pwsh
         run: |
           # The DLL is already at the workspace root from the Package step
-          # installer.nsi expects obs-multi-rtmp.dll and data/ in the same directory
+          # installer.nsi expects chaoscast-plugin.dll and data/ in the same directory
           # Verify files exist
-          if (!(Test-Path "obs-multi-rtmp.dll")) {
-            Write-Error "obs-multi-rtmp.dll not found"
+          if (!(Test-Path "chaoscast-plugin.dll")) {
+            Write-Error "chaoscast-plugin.dll not found"
             exit 1
           }
           if (!(Test-Path "data/locale/en-US.ini")) {
@@ -76,5 +76,5 @@ jobs:
           name: chaoscast-obs-plugin-${{ steps.setup.outputs.pluginVersion }}-windows-x64
           path: |
             ${{ github.workspace }}/chaoscast-obs-plugin-windows-x64.zip
-            ${{ github.workspace }}/obs-multi-rtmp.dll
+            ${{ github.workspace }}/chaoscast-plugin.dll
             ${{ github.workspace }}/ChaosCast-OBS-Plugin-Setup.exe

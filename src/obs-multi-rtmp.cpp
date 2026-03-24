@@ -14,7 +14,7 @@
 #include <Windows.h>
 #endif
 
-#define ConfigSection "obs-multi-rtmp"
+#define ConfigSection "chaoscast-plugin"
 
 static class GlobalServiceImpl : public GlobalService
 {
@@ -233,7 +233,7 @@ private:
 };
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE("obs-multi-rtmp", "en-US")
+OBS_MODULE_USE_DEFAULT_LOCALE("chaoscast-plugin", "en-US")
 OBS_MODULE_AUTHOR("雷鳴 (@sorayukinoyume)")
 
 bool obs_module_load()
@@ -246,14 +246,14 @@ bool obs_module_load()
     });
 
     auto dock = new MultiOutputWidget();
-    dock->setObjectName("obs-multi-rtmp-dock");
-    if (!obs_frontend_add_dock_by_id("obs-multi-rtmp-dock", obs_module_text("Title"), dock))
+    dock->setObjectName("chaoscast-plugin-dock");
+    if (!obs_frontend_add_dock_by_id("chaoscast-plugin-dock", obs_module_text("Title"), dock))
     {
         delete dock;
         return false;
     }
 
-    blog(LOG_INFO, TAG "version: %s by SoraYuki https://github.com/sorayuki/obs-multi-rtmp/", PLUGIN_VERSION);
+    blog(LOG_INFO, TAG "version: %s — ChaosCast multistream plugin (fork of obs-multi-rtmp by SoraYuki)", PLUGIN_VERSION);
 
     obs_frontend_add_event_callback(
         [](enum obs_frontend_event event, void *private_data) {

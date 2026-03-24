@@ -78,12 +78,10 @@ Function .onInit
     FoundSomething:
 
     ; Check OBS version — we need 30+
-    ; Try to read version from the exe
     StrCmp $ObsProgramFiles "" SkipVersionCheck 0
         GetDLLVersion "$ObsProgramFiles\bin\64bit\obs64.exe" $R0 $R1
         IntOp $R2 $R0 >> 16
         IntOp $R2 $R2 & 0xFFFF
-        ; $R2 is now the major version
         IntCmp $R2 30 VersionOK VersionTooOld VersionOK
         VersionTooOld:
             MessageBox MB_YESNO|MB_ICONEXCLAMATION \
@@ -98,14 +96,26 @@ FunctionEnd
 Section "Install"
     StrCpy $InstallCount "0"
 
+    ; ── Remove old obs-multi-rtmp plugin if present ──
+    ; Clean up the old name so users don't end up with both
+    StrCmp $ObsProgramFiles "" SkipPFClean 0
+        Delete "$ObsProgramFiles\obs-plugins\64bit\obs-multi-rtmp.dll"
+        RMDir /r "$ObsProgramFiles\data\obs-plugins\obs-multi-rtmp"
+    SkipPFClean:
+    StrCmp $ObsSteam "" SkipSteamClean 0
+        Delete "$ObsSteam\obs-plugins\64bit\obs-multi-rtmp.dll"
+        RMDir /r "$ObsSteam\data\obs-plugins\obs-multi-rtmp"
+    SkipSteamClean:
+    RMDir /r "$ObsAppData\plugins\obs-multi-rtmp"
+
     ; ── Install to Program Files (flat layout) ──
     StrCmp $ObsProgramFiles "" SkipPFInstall 0
     IfFileExists "$ObsProgramFiles\obs-plugins\64bit\*.*" 0 SkipPFInstall
         DetailPrint "Installing to: $ObsProgramFiles\obs-plugins\64bit\"
         SetOutPath "$ObsProgramFiles\obs-plugins\64bit"
-        File "obs-multi-rtmp.dll"
-        CreateDirectory "$ObsProgramFiles\data\obs-plugins\obs-multi-rtmp\locale\en-US"
-        SetOutPath "$ObsProgramFiles\data\obs-plugins\obs-multi-rtmp\locale\en-US"
+        File "chaoscast-plugin.dll"
+        CreateDirectory "$ObsProgramFiles\data\obs-plugins\chaoscast-plugin\locale"
+        SetOutPath "$ObsProgramFiles\data\obs-plugins\chaoscast-plugin\locale"
         File "data\locale\en-US.ini"
         IntOp $InstallCount $InstallCount + 1
         DetailPrint "Installed to Program Files (system-level)"
@@ -116,21 +126,21 @@ Section "Install"
     IfFileExists "$ObsSteam\obs-plugins\64bit\*.*" 0 SkipSteamInstall
         DetailPrint "Installing to: $ObsSteam\obs-plugins\64bit\"
         SetOutPath "$ObsSteam\obs-plugins\64bit"
-        File "obs-multi-rtmp.dll"
-        CreateDirectory "$ObsSteam\data\obs-plugins\obs-multi-rtmp\locale\en-US"
-        SetOutPath "$ObsSteam\data\obs-plugins\obs-multi-rtmp\locale\en-US"
+        File "chaoscast-plugin.dll"
+        CreateDirectory "$ObsSteam\data\obs-plugins\chaoscast-plugin\locale"
+        SetOutPath "$ObsSteam\data\obs-plugins\chaoscast-plugin\locale"
         File "data\locale\en-US.ini"
         IntOp $InstallCount $InstallCount + 1
         DetailPrint "Installed to Steam OBS (system-level)"
     SkipSteamInstall:
 
     ; ── Install to AppData (user-level, OBS 28+ style) ──
-    DetailPrint "Installing to: $ObsAppData\plugins\obs-multi-rtmp\"
-    CreateDirectory "$ObsAppData\plugins\obs-multi-rtmp\bin\64bit"
-    SetOutPath "$ObsAppData\plugins\obs-multi-rtmp\bin\64bit"
-    File "obs-multi-rtmp.dll"
-    CreateDirectory "$ObsAppData\plugins\obs-multi-rtmp\data\locale\en-US"
-    SetOutPath "$ObsAppData\plugins\obs-multi-rtmp\data\locale\en-US"
+    DetailPrint "Installing to: $ObsAppData\plugins\chaoscast-plugin\"
+    CreateDirectory "$ObsAppData\plugins\chaoscast-plugin\bin\64bit"
+    SetOutPath "$ObsAppData\plugins\chaoscast-plugin\bin\64bit"
+    File "chaoscast-plugin.dll"
+    CreateDirectory "$ObsAppData\plugins\chaoscast-plugin\data\locale"
+    SetOutPath "$ObsAppData\plugins\chaoscast-plugin\data\locale"
     File "data\locale\en-US.ini"
     IntOp $InstallCount $InstallCount + 1
     DetailPrint "Installed to AppData (user-level)"

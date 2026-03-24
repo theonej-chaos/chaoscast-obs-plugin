@@ -29,7 +29,7 @@
 #include "obs-frontend-api.h"
 #include "util/config-file.h"
 
-#define TAG "[obs-multi-rtmp] "
+#define TAG "[chaoscast] "
 
 inline std::string tostdu8(const QString& qs)
 {

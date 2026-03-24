@@ -36,7 +36,7 @@
             "bundleId": "net.sorayuki.obs-multi-rtmp"
         }
     },
-    "name": "obs-multi-rtmp",
+    "name": "chaoscast-plugin",
     "version": "0.7.3.0",
     "author": "SoraYuki",
     "website": "https://github.com/sorayuki",
