@@ -399,3 +399,44 @@ void chaoscast_vendor_init()
 
     blog(LOG_INFO, TAG "All vendor requests registered successfully");
 }
+
+// ── Shutdown: clean up all managed outputs ──
+void chaoscast_vendor_shutdown()
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+
+    blog(LOG_INFO, TAG "Shutting down — cleaning up %zu managed outputs", s_outputs.size());
+
+    for (auto it = s_outputs.begin(); it != s_outputs.end(); ) {
+        auto &mo = it->second;
+
+        // Force stop if running
+        if (mo.output && mo.running) {
+            blog(LOG_INFO, TAG "Force-stopping output: %s", mo.name.c_str());
+            obs_output_force_stop(mo.output);
+            mo.running = false;
+        }
+
+        // Disconnect signal handlers
+        if (mo.output) {
+            auto sig = obs_output_get_signal_handler(mo.output);
+            if (sig) {
+                signal_handler_disconnect(sig, "start", on_output_started, &mo.name);
+                signal_handler_disconnect(sig, "stop", on_output_stopped, &mo.name);
+            }
+            obs_output_release(mo.output);
+            mo.output = nullptr;
+        }
+
+        // Release service
+        if (mo.service) {
+            obs_service_release(mo.service);
+            mo.service = nullptr;
+        }
+
+        blog(LOG_INFO, TAG "Cleaned up output: %s", mo.name.c_str());
+        it = s_outputs.erase(it);
+    }
+
+    blog(LOG_INFO, TAG "All managed outputs cleaned up");
+}

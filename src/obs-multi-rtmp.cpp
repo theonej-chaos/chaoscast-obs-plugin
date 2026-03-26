@@ -264,6 +264,9 @@ bool obs_module_load()
 
             if (event == obs_frontend_event::OBS_FRONTEND_EVENT_EXIT)
             {   
+                // Clean up all ChaosCast managed outputs before OBS shuts down
+                // This prevents crashes from dangling encoder references
+                chaoscast_vendor_shutdown();
                 dock->SaveConfig();
             }
             else if (event == obs_frontend_event::OBS_FRONTEND_EVENT_PROFILE_CHANGED)
@@ -287,4 +290,11 @@ void obs_module_post_load(void)
     // Per the obs-websocket API docs, vendor registration MUST happen
     // in obs_module_post_load(), after all modules have loaded.
     chaoscast_vendor_init();
+}
+
+void obs_module_unload(void)
+{
+    // Safety net: ensure all managed outputs are cleaned up
+    // This runs after obs_module_post_load's counterpart during shutdown
+    chaoscast_vendor_shutdown();
 }
